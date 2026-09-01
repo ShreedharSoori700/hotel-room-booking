@@ -53,6 +53,9 @@ async function seedAdmin() {
 
 async function start() {
   try {
+    if (!process.env.MONGO_URI) {
+      throw new Error("MONGO_URI is not set");
+    }
     await mongoose.connect(process.env.MONGO_URI);
     console.log("MongoDB Atlas connected");
     await seedAdmin();
@@ -63,4 +66,9 @@ async function start() {
     process.exit(1);
   }
 }
-start();
+
+if (require.main === module) {
+  start();
+}
+
+module.exports = { app, start, seedAdmin };
