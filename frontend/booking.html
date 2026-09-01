@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Book Room</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .amenities-list { margin: 15px 0; }
+    .amenities-list h4 { margin: 10px 0 8px; font-size: 14px; color: #333; }
+    .amenities-list ul { list-style: none; padding: 0; margin: 0; }
+    .amenities-list li { padding: 5px 0; color: #555; font-size: 14px; }
+    .amenities-list li:before { content: "✓ "; color: #27633a; font-weight: bold; margin-right: 8px; }
+    .room-details { background: #f9f7f4; padding: 15px; border-radius: 10px; margin: 15px 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <nav>
+      <a class="logo" href="index.html">🏨 GrandStay</a>
+      <a href="rooms.html">← Rooms</a>
+    </nav>
+  </header>
+
+  <main class="section narrow">
+    <div class="form-card">
+      <h1>Book Your Room</h1>
+      
+      <div id="selectedRoom"></div>
+      
+      <div id="roomAmenities" class="room-details hidden"></div>
+      
+      <form id="bookingForm">
+        <label>Guest Name
+          <input id="guestName" required pattern="[A-Za-z ]{3,80}">
+        </label>
+        
+        <label>Phone
+          <input id="phone" required maxlength="10" pattern="\d{10}" inputmode="numeric">
+        </label>
+        
+        <label>Check-in
+          <input id="checkIn" type="date" required>
+        </label>
+        
+        <label>Check-out
+          <input id="checkOut" type="date" required>
+        </label>
+        
+        <label>Guests
+          <input id="guests" type="number" min="1" required>
+        </label>
+        
+        <div id="totalBox" class="total">Total: ₹0</div>
+        
+        <button class="btn full">Confirm Booking</button>
+        <p id="formMsg" class="msg"></p>
+      </form>
+    </div>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
