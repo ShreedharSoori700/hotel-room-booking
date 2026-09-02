@@ -2,14 +2,19 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, master ]
+    branches:
+      - main
+      - feature/devops
   pull_request:
-    branches: [ main, master ]
+    branches:
+      - main
+      - feature/devops
   workflow_dispatch:
 
 jobs:
-  test:
+  test-and-build:
     runs-on: ubuntu-latest
+
     env:
       JWT_SECRET: test-secret
       ADMIN_EMAIL: admin@hotel.com
@@ -26,7 +31,7 @@ jobs:
           cache: npm
           cache-dependency-path: backend/package-lock.json
 
-      - name: Install dependencies
+      - name: Install backend dependencies
         working-directory: backend
         run: npm install
 
@@ -35,68 +40,29 @@ jobs:
         run: npm test
 
       - name: Build Docker image
-        run: docker build -t hotel-room-booking:ci .
+        run: docker build -t grandstay:ci .
 
-      - name: Smoke test container
+      - name: Run Docker container
         run: |
-          docker run -d --rm -p 8080:80 -e PORT=5000 -e JWT_SECRET=${JWT_SECRET} -e ADMIN_EMAIL=${ADMIN_EMAIL} -e ADMIN_PASSWORD=${ADMIN_PASSWORD} --name hotel-room-booking-ci hotel-room-booking:ci
-          sleep 10
-          curl --fail http://localhost:8080/api
-          docker stop hotel-room-booking-ci
+          docker run -d \
+            --name grandstay-ci \
+            -p 8080:80 \
+            -e PORT=5000 \
+            -e JWT_SECRET=$JWT_SECRET \
+            -e ADMIN_EMAIL=$ADMIN_EMAIL \
+            -e ADMIN_PASSWORD=$ADMIN_PASSWORD \
+            grandstay:ci
 
-  build-and-push-to-ecr:
-    needs: test
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-    runs-on: ubuntu-latest
+      - name: Wait for container
+        run: sleep 10
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Test application
+        run: curl --fail http://localhost:8080/api
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+      - name: Show container logs
+        if: always()
+        run: docker logs grandstay-ci
 
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build, tag, and push image to ECR
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ secrets.AWS_ECR_REPOSITORY }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-
-  deploy-to-ec2:
-    needs: build-and-push-to-ecr
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Deploy to EC2 via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_PRIVATE_KEY }}
-          script: |
-            aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
-            docker pull ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ secrets.AWS_ECR_REPOSITORY }}:latest
-            docker stop hotel-room-booking || true
-            docker rm hotel-room-booking || true
-            docker run -d --name hotel-room-booking -p 80:80 -p 5000:5000 \
-              -e PORT=5000 \
-              -e MONGO_URI="${{ secrets.MONGO_URI }}" \
-              -e JWT_SECRET="${{ secrets.JWT_SECRET }}" \
-              -e ADMIN_EMAIL="${{ secrets.ADMIN_EMAIL }}" \
-              -e ADMIN_PASSWORD="${{ secrets.ADMIN_PASSWORD }}" \
-              ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ secrets.AWS_ECR_REPOSITORY }}:latest
-            docker ps
+      - name: Stop container
+        if: always()
+        run: docker stop grandstay-ci || true
